@@ -14,8 +14,9 @@ It reacts to Claude's activity in real-time:
 
 - [Claude Code](https://claude.ai/code) CLI
 - Python 3.8+
-- **Windows**: [Windows Terminal](https://aka.ms/terminal) (`wt.exe`)
-- **Mac/Linux**: not yet supported (contributions welcome)
+- **Windows**: [Windows Terminal](https://aka.ms/terminal) (`wt.exe`) — split pane in same window
+- **Mac**: tmux (split pane) or Terminal.app (new window fallback)
+- **Linux**: tmux (split pane) or runs in background fallback
 
 ## Install
 
