@@ -7,6 +7,9 @@ Events:
   delayed_idle  — background timer: write idle if no newer activity occurred
   pre           — PreToolUse: write waiting or running:<speed>
   post          — PostToolUse: write running:<speed>
+
+Platform support: Windows, macOS, Linux, iOS (iSH / a-Shell)
+State file location: $CLAUDE_CONFIG_DIR/pet/state (default: ~/.claude/pet/state)
 """
 
 import sys
@@ -15,7 +18,8 @@ import json
 import time
 import subprocess
 
-STATE_FILE = os.path.expanduser('~/.claude/pet/state')
+_config_dir = os.environ.get('CLAUDE_CONFIG_DIR', os.path.expanduser('~/.claude'))
+STATE_FILE = os.path.join(_config_dir, 'pet', 'state')
 
 # Tools that never need user confirmation
 SAFE_TOOLS = {'Read', 'Glob', 'Grep', 'ToolSearch'}
@@ -57,7 +61,7 @@ def spawn_delayed_idle(sleep_start: float) -> None:
             subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW
         )
     else:
-        kwargs['close_fds'] = True
+        kwargs['start_new_session'] = True  # detach from controlling terminal
 
     subprocess.Popen(
         [sys.executable, os.path.abspath(__file__), 'delayed_idle', str(sleep_start)],

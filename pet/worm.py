@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Terminal worm pet — crawls left and right in its own pane.
 
-Speed and colour are driven by ~/.claude/pet/state:
+Speed and colour are driven by ~/.claude/pet/state (or $CLAUDE_CONFIG_DIR/pet/state):
   idle        — frozen, white  (Claude waiting for user input)
   waiting     — frozen, white + "?" (awaiting tool confirmation)
   running:1   — slow,  yellow  (thinking / text generation / light tools)
   running:3   — fast,  red     (Bash / Agent / heavy execution)
+
+Platform support: Windows, macOS, Linux, iOS (iSH / a-Shell)
 """
 
 import sys
@@ -14,7 +16,12 @@ import time
 import shutil
 import signal
 
-STATE_FILE = os.path.expanduser('~/.claude/pet/state')
+# UTF-8 output — required for iOS terminals and some Windows codepage configs
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+
+_config_dir = os.environ.get('CLAUDE_CONFIG_DIR', os.path.expanduser('~/.claude'))
+STATE_FILE = os.path.join(_config_dir, 'pet', 'state')
 
 SHAPES = {
     (1,  'A'): '_____' + '(o.o)',
@@ -35,6 +42,14 @@ RED    = '\033[91m'
 RESET  = '\033[0m'
 SPEED_COLOR = {1: YELLOW, 3: RED}
 
+# Track terminal size for SIGWINCH (iOS orientation changes resize the terminal)
+_cols = shutil.get_terminal_size((80, 3)).columns
+
+
+def _update_cols(*_):
+    global _cols
+    _cols = shutil.get_terminal_size((80, 3)).columns
+
 
 def read_state():
     """Return (mode, speed): mode='idle'|'waiting'|'running', speed=1..3."""
@@ -54,7 +69,7 @@ def read_state():
 
 def draw_text(pos, text, color=''):
     """Write `text` at column `pos`, optionally wrapped in an ANSI colour."""
-    cols = shutil.get_terminal_size((80, 3)).columns
+    cols = _cols
     tlen = len(text)                         # visible width (no ANSI codes)
     pos  = max(0, min(pos, cols - tlen))
     before = ' ' * pos
@@ -80,6 +95,7 @@ def draw_waiting(pos, direction, is_dizzy):
 
 
 def main():
+    global _cols
     sys.stdout.write('\033[?25l')  # hide cursor
     sys.stdout.flush()
 
@@ -91,7 +107,11 @@ def main():
 
     signal.signal(signal.SIGTERM, cleanup)
     signal.signal(signal.SIGINT, cleanup)
+    # SIGWINCH: terminal resize (iOS orientation change, window resize)
+    if hasattr(signal, 'SIGWINCH'):
+        signal.signal(signal.SIGWINCH, _update_cols)
 
+    _cols = shutil.get_terminal_size((80, 3)).columns
     pos = 0
     direction = 1
     is_dizzy = False
@@ -99,7 +119,7 @@ def main():
     try:
         while True:
             mode, speed = read_state()
-            cols = shutil.get_terminal_size((80, 3)).columns
+            cols = _cols
             wlen = len(SHAPES[(direction, 'A')])  # always 10
 
             # ── Idle: slow white crawl ────────────────────────────────────────
