@@ -1,103 +1,101 @@
-# Claude Pet — Terminal Worm for Claude Code
+# Terminal Pet — Claude Code and Codex
 
-A terminal worm animation that lives in a split pane and reacts to [Claude Code](https://claude.ai/code)'s activity in real time.
+A terminal worm in a split pane that reacts to AI activity. Python 3.8+, no third-party Python dependencies.
 
-```
-running (red/fast):   _/\_(>.<)_________________________
-idle    (white/slow): _____________________________(o.o)_____
-waiting (frozen+?):   _____(o.o)?______________________
-```
+| State | Appearance | Meaning |
+|---|---|---|
+| idle | white, slow crawl | ready for input |
+| waiting | frozen with `?` | permission approval requested |
+| running:1 | yellow | thinking, generation, light tools |
+| running:3 | red, fast | shell commands or agents |
 
-## Platforms
+## Install
 
-| Platform | Split pane | Status |
-|----------|-----------|--------|
-| Windows (Windows Terminal) | `wt.exe` split | ✅ |
-| macOS / Linux (tmux) | `tmux split-window` | ✅ |
-| iOS — iSH Shell (tmux) | `tmux split-window` | ✅ |
-| iOS — a-Shell | Background process | ✅ |
-| SSH from iOS (any terminal) | Inherits server env | ✅ |
-
-## Worm states
-
-| State | Color | Speed | Meaning |
-|-------|-------|-------|---------|
-| `idle` | white | slow crawl | Waiting for your input |
-| `waiting` | white + `?` | frozen | Tool needs your confirmation |
-| `running:1` | yellow | moderate | Thinking / reading / writing |
-| `running:3` | red | fast | Shell commands / agents running |
-
-## Installation
-
-### macOS / Linux / iOS (iSH)
-
-```bash
+```sh
 git clone https://github.com/qi1224/claude-pet.git
 cd claude-pet
-bash install-unix.sh
+python install.py --provider claude
+python install.py --provider codex
+# Or both:
+python install.py --provider all
 ```
 
-For split-pane view, run Claude Code inside tmux:
+On Unix use `python3`, or `bash install-unix.sh --provider all`.
+On Windows use `py -3`, or `.\install-windows.ps1 -Provider all`.
 
-```bash
-tmux new-session -s claude 'claude'
-# then /pet inside Claude Code
+Restart Claude Code and invoke `/pet`. Restart Codex, review and trust the
+installed hooks using `/hooks`, then invoke `$pet`. Codex must support the lifecycle
+hooks documented at https://learn.chatgpt.com/docs/hooks; older versions may need an update.
+This installs a local skill and hook configuration, not a marketplace plugin.
+
+The installer preserves unrelated hooks and settings, replaces only this pet's
+hooks, and backs up existing configuration to `settings.json.bak` or `hooks.json.bak`
+before writing. The backup is the configuration before the most recent install.
+Malformed JSON is rejected without overwriting it.
+
+`CLAUDE_CONFIG_DIR` and `CODEX_HOME` override the default `~/.claude` and `~/.codex`
+directories. `--config-dir PATH` selects an explicit directory for one provider.
+Scripts live under `<config>/pet`; Claude uses `commands/pet.md` and `settings.json`,
+Codex uses `skills/pet/SKILL.md` and `hooks.json`.
+
+## Terminal and session selection
+
+Windows uses `wt.exe` when available (run inside Windows Terminal). Unix uses a
+bottom pane when inside tmux. Otherwise animation stays visible in the current
+terminal; run it in a separate terminal and press Ctrl+C to stop it.
+It never silently redirects the animation to an invisible background process.
+
+```sh
+python ~/.codex/pet/launch.py --provider codex
+python ~/.codex/pet/launch.py --provider codex --session-id SESSION_ID
+python ~/.codex/pet/launch.py --provider codex --inline
 ```
 
-On **iSH** (iOS): install tmux first: `apk add tmux python3`
+By default the launcher binds to the most recently started/submitted session for
+that provider at launch time. With concurrent sessions, pass `--session-id` explicitly.
+Each session has a hashed state filename, so different sessions cannot overwrite
+one another. Hooks use atomic writes. Stop/interrupt events return to idle immediately.
+Simultaneous tools within one session use the latest received event; this is an
+activity indicator, not a count of running jobs. Hosted tools without lifecycle
+hook coverage remain at the turn's thinking state.
 
-### Windows
+## Other command-line AI programs
 
-```powershell
-git clone https://github.com/qi1224/claude-pet.git
-cd claude-pet
-.\install-windows.ps1
+Animation is independent of the AI. Any program can write one of the four state
+strings to its own file and run:
+
+```sh
+python pet/worm.py --state-file /path/to/my-ai.state
+python pet/launch.py --state-file /path/to/my-ai.state
 ```
 
-Requires [Windows Terminal](https://aka.ms/terminal).
+Or send lifecycle JSON on stdin to the adapter:
 
-## Manual installation
-
-Copy files to `~/.claude/pet/` and `~/.claude/commands/`:
-
-```
-~/.claude/
-├── pet/
-│   ├── worm.py       ← animation process
-│   ├── hook.py       ← Claude Code event hook
-│   ├── launch.sh     ← platform-aware launcher
-│   └── state         ← runtime state file (auto-created)
-└── commands/
-    └── pet.md        ← /pet skill command
+```sh
+echo '{"hook_event_name":"PreToolUse","tool_name":"Bash","session_id":"demo"}' | python pet/hook.py --state-file /path/to/my-ai.state
 ```
 
-Add hooks to `~/.claude/settings.json`:
+Supported events: SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest,
+PostToolUse, Stop, Interrupt, SessionEnd. Legacy positional aliases `submit`, `pre`,
+`post`, `permission`, `stop` still work. Only PermissionRequest sets waiting;
+PreToolUse sets running, and PostToolUse returns to thinking.
+Other AI programs need their own event integration; arbitrary terminal output
+cannot reliably identify permission or thinking states.
 
-```json
-{
-  "hooks": {
-    "Stop":             [{"matcher":"","hooks":[{"type":"command","command":"python3 ~/.claude/pet/hook.py stop"}]}],
-    "PreToolUse":       [{"matcher":"","hooks":[{"type":"command","command":"python3 ~/.claude/pet/hook.py pre"}]}],
-    "PostToolUse":      [{"matcher":"","hooks":[{"type":"command","command":"python3 ~/.claude/pet/hook.py post"}]}],
-    "UserPromptSubmit": [{"matcher":"","hooks":[{"type":"command","command":"python3 ~/.claude/pet/hook.py submit"}]}]
-  }
-}
+## Tests
+
+```sh
+python -m unittest discover -s tests -v
 ```
 
-## Usage
+Tests exercise real hook subprocesses, installed hooks through the host shell,
+configuration preservation, session isolation, launch command construction and
+real ANSI animation output. GUI pane rendering still needs a manual check on each
+target terminal; command construction tests do not establish that it rendered.
 
-Inside Claude Code, type:
+## Uninstall
 
-```
-/pet
-```
-
-## Environment variable
-
-Set `CLAUDE_CONFIG_DIR` to override the default `~/.claude` path.
-
-## Requirements
-
-- Python 3.8+
-- A terminal that supports ANSI escape codes
-- tmux (for split-pane on Unix/iOS) or Windows Terminal (on Windows)
+Remove only hook handlers whose command points to this installation's
+`pet/hook.py` from `settings.json` (Claude) or `hooks.json` (Codex). Preserve all
+other handlers. Then remove the `pet` directory and `commands/pet.md` (Claude)
+or `skills/pet` (Codex), and restart the AI program.

@@ -2,7 +2,7 @@
 """Terminal worm pet — crawls left and right in its own pane.
 
 Speed and colour are driven by ~/.claude/pet/state (or $CLAUDE_CONFIG_DIR/pet/state):
-  idle        — frozen, white  (Claude waiting for user input)
+  idle        — slow white crawl (waiting for user input)
   waiting     — frozen, white + "?" (awaiting tool confirmation)
   running:1   — slow,  yellow  (thinking / text generation / light tools)
   running:3   — fast,  red     (Bash / Agent / heavy execution)
@@ -15,13 +15,14 @@ import os
 import time
 import shutil
 import signal
+import argparse
+from runtime import root_dir
 
 # UTF-8 output — required for iOS terminals and some Windows codepage configs
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
-_config_dir = os.environ.get('CLAUDE_CONFIG_DIR', os.path.expanduser('~/.claude'))
-STATE_FILE = os.path.join(_config_dir, 'pet', 'state')
+STATE_FILE = str(root_dir('claude') / 'state')
 
 SHAPES = {
     (1,  'A'): '_____' + '(o.o)',
@@ -70,6 +71,7 @@ def read_state():
 def draw_text(pos, text, color=''):
     """Write `text` at column `pos`, optionally wrapped in an ANSI colour."""
     cols = _cols
+    text = text[:max(0, cols)]
     tlen = len(text)                         # visible width (no ANSI codes)
     pos  = max(0, min(pos, cols - tlen))
     before = ' ' * pos
@@ -95,7 +97,11 @@ def draw_waiting(pos, direction, is_dizzy):
 
 
 def main():
-    global _cols
+    global _cols, STATE_FILE
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--state-file', default=STATE_FILE)
+    args = parser.parse_args()
+    STATE_FILE = args.state_file
     sys.stdout.write('\033[?25l')  # hide cursor
     sys.stdout.flush()
 
@@ -118,6 +124,7 @@ def main():
 
     try:
         while True:
+            _update_cols()
             mode, speed = read_state()
             cols = _cols
             wlen = len(SHAPES[(direction, 'A')])  # always 10
@@ -145,7 +152,7 @@ def main():
 
             # ── Waiting: frozen + "?" indicator ──────────────────────────────
             if mode == 'waiting':
-                draw_waiting(pos, direction, is_dizzy)
+                draw_waiting(pos, direction, False)
                 time.sleep(0.05)
                 continue
 

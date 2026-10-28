@@ -1,9 +1,9 @@
-Launch the worm pet in a split pane at the bottom of the current terminal window.
-
-Run the following bash command:
+Launch the terminal worm pet using the shell tool:
 
 ```bash
-bash ~/.claude/pet/launch.sh
+python3 ~/.claude/pet/launch.py --provider claude
 ```
 
-After running, tell the user: "宠物虫子已启动！"
+The installer generates this command with the actual Python and installation paths.
+For multiple sessions append --session-id with the current session ID, when known.
+Without a split-pane backend, ask the user to run it in a separate terminal.
